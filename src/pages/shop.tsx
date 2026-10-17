@@ -131,7 +131,7 @@ export const Shop = (props: ShopProps) => {
                 </div>
                 <div class="flex flex-col gap-1">
                     <div class="text-xl text-white font-bold">
-                        Background
+                        Latar Belakang
                     </div>
                     <div class="grid grid-cols-3 gap-1">
                         <For each={Object.keys(GameItemMeta.Background)}>
