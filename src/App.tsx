@@ -1,53 +1,32 @@
-import { Accessor, createContext, createEffect, createSignal, Match, onMount, Setter, Show, Switch, type Component } from 'solid-js';
+import { Accessor, batch, createContext, createEffect, createSignal, Match, onMount, Setter, Show, Switch, type Component } from 'solid-js';
 import { Classic } from './pages/classic';
 import { MainMenu } from './pages/main-menu';
 
 import { createStore, SetStoreFunction } from 'solid-js/store';
 import BgCityDay from "./assets/city-day.jpg";
-import CopArrest from "./assets/cop-arrest.png";
-import CopExplain from "./assets/cop-explain.png";
-import CopIdle from "./assets/cop-idle.png";
-import CopLetgo from "./assets/cop-letgo.png";
-import CopTicket from "./assets/cop-ticket.png";
 import CopWave from "./assets/cop-wave.png";
-import CopWonder from "./assets/cop-wonder.png";
 import DudeHappy from "./assets/dude-happy.png";
 import DudeScared from "./assets/dude-scared.png";
 import DudeTalking from "./assets/dude-talking.png";
 import GavelBlock from "./assets/gavel-block.png";
 import Gavel from "./assets/gavel.png";
-import LetgoGift from "./assets/gift.jpg";
 import Heart from "./assets/heart.png";
 import LetgoWanted from "./assets/wanted.jpg";
+import { Shop } from './pages/shop';
+import { GameItems } from './items/game-items';
 
 const loadAssets = [
-    CopArrest, CopExplain, CopIdle, CopLetgo, CopTicket, CopWave, CopWonder, DudeHappy, DudeScared, DudeTalking, BgCityDay, GavelBlock, Gavel, LetgoGift, LetgoWanted, Heart
+    CopWave, DudeHappy, DudeScared, DudeTalking, BgCityDay, GavelBlock, Gavel, LetgoWanted, Heart
 ]
 
 export enum Page {
     main,
-    classic
+    classic,
+    shop
 }
 
 type PageContextType = {
     set: Setter<Page>,
-}
-
-export namespace GameItems {
-    export enum Avatar {
-        Cop,
-        FemCop,
-        RoboCop,
-    }
-
-    export enum Background {
-        CityDay,
-        CityNight,
-        VillageDay,
-        VillageNight,
-        BeachDay,
-        BeachNight,
-    }
 }
 
 export interface PlayerDataContextType {
@@ -64,7 +43,8 @@ export interface PlayerDataContextType {
     coin: number,
 }
 
-export const PlayerDataContext = createContext<PlayerDataContextType>()
+export const PlayerDataContext = createContext<[PlayerDataContextType, SetStoreFunction<PlayerDataContextType>]>()
+
 export const PageContext = createContext<PageContextType>();
 
 const App: Component = () => {
@@ -95,13 +75,15 @@ const App: Component = () => {
         healthRegen: 0,
     });
 
-    // save when playerData changed
-    createEffect(()=>{
-        localStorage.setItem("coin", player.coin.toString());
-        localStorage.setItem("maxHealth", player.maxHealth.toString());
-        localStorage.setItem("healthRegen", player.healthRegen.toString());
-        localStorage.setItem("isUnlocked", JSON.stringify(player.isUnlocked));
-        localStorage.setItem("equipped", JSON.stringify(player.equipped));
+    onMount(()=>{
+        // save when playerData changed
+        createEffect(()=>{
+            localStorage.setItem("coin", player.coin.toString());
+            localStorage.setItem("maxHealth", player.maxHealth.toString());
+            localStorage.setItem("healthRegen", player.healthRegen.toString());
+            localStorage.setItem("isUnlocked", JSON.stringify(player.isUnlocked));
+            localStorage.setItem("equipped", JSON.stringify(player.equipped));
+        })
     })
 
     return <div class='flex justify-center bg-blue-200'>
@@ -109,13 +91,16 @@ const App: Component = () => {
             {!loaded() && <LoadingScreen setPlayer={setPlayer} loadingItem={loadAssets} onLoaded={() => setLoaded(true)} />}
             <Show when={loaded()}>
                 <PageContext.Provider value={{ set: setPage }}>
-                    <PlayerDataContext.Provider value={player}>
+                    <PlayerDataContext.Provider value={[player, setPlayer]}>
                         <Switch>
                             <Match when={page() == Page.main}>
                                 <MainMenu />
                             </Match>
                             <Match when={page() == Page.classic}>
                                 <Classic />
+                            </Match>
+                            <Match when={page() == Page.shop}>
+                                <Shop/>
                             </Match>
                         </Switch>
                     </PlayerDataContext.Provider>
@@ -150,45 +135,47 @@ export const LoadingScreen = (props: LoadingScreenProps) => {
             }
             loading();
         }
-        const coin_raw = localStorage.getItem("coin");
-        const coin = parseInt(coin_raw ?? "0");
-        if (coin) {
-            props.setPlayer("coin", coin);
-        }
-        const max_health_raw = localStorage.getItem("maxHealth");
-        const max_health = parseInt(max_health_raw ?? "0");
-        if (max_health) {
-            props.setPlayer("maxHealth", max_health);
-        }
-        let health_regen_raw = localStorage.getItem("healthRegen");
-        const health_regen = parseInt(health_regen_raw ?? "0");
-        if (health_regen) {
-            props.setPlayer("healthRegen", health_regen);
-        }
-        const equipped_raw = localStorage.getItem("equipped");
-        const equipped = JSON.parse(equipped_raw ?? "{}")
-        if (equipped) {
-            props.setPlayer("equipped", (curr) => {
-                const avatar = equipped.avatar ?? curr.avatar;
-                const background = equipped.background ?? curr.background;
-                return {
-                    avatar,
-                    background,
-                }
-            })
-        }
-        const unlocked_raw = localStorage.getItem("isUnlocked");
-        const unlocked = JSON.parse(unlocked_raw ?? "{}");
-        if (unlocked) {
-            props.setPlayer("isUnlocked", (curr) => {
-                const avatar = { ...curr.avatar, ...(unlocked.avatar ? unlocked.avatar : {}) };
-                const background = { ...curr.background, ...(unlocked.background ? unlocked.background : {}) };
-                return {
-                    avatar,
-                    background,
-                }
-            })
-        }
+        batch(()=>{
+            const coin_raw = localStorage.getItem("coin");
+            const coin = parseInt(coin_raw ?? "0");
+            if (coin) {
+                props.setPlayer("coin", coin);
+            }
+            const max_health_raw = localStorage.getItem("maxHealth");
+            const max_health = parseInt(max_health_raw ?? "0");
+            if (max_health) {
+                props.setPlayer("maxHealth", max_health);
+            }
+            let health_regen_raw = localStorage.getItem("healthRegen");
+            const health_regen = parseInt(health_regen_raw ?? "0");
+            if (health_regen) {
+                props.setPlayer("healthRegen", health_regen);
+            }
+            const equipped_raw = localStorage.getItem("equipped");
+            const equipped = JSON.parse(equipped_raw ?? "{}")
+            if (equipped) {
+                props.setPlayer("equipped", (curr) => {
+                    const avatar = equipped.avatar ?? curr.avatar;
+                    const background = equipped.background ?? curr.background;
+                    return {
+                        avatar,
+                        background,
+                    }
+                })
+            }
+            const unlocked_raw = localStorage.getItem("isUnlocked");
+            const unlocked = JSON.parse(unlocked_raw ?? "{}");
+            if (unlocked) {
+                props.setPlayer("isUnlocked", (curr) => {
+                    const avatar = { ...curr.avatar, ...(unlocked.avatar ? unlocked.avatar : {}) };
+                    const background = { ...curr.background, ...(unlocked.background ? unlocked.background : {}) };
+                    return {
+                        avatar,
+                        background,
+                    }
+                })
+            }
+        })
         setPlayerDataLoaded(true);
     })
     return <>

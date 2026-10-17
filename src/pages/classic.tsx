@@ -1,26 +1,28 @@
 import { Accessor, batch, children, createEffect, createMemo, createSignal, For, on, onMount, Show, useContext } from "solid-js"
 import { createStore } from "solid-js/store"
-import CopArrest from "../assets/cop-arrest.png"
-import CopLetgoGift from "../assets/gift.jpg"
-import CopLetgoWanted from "../assets/wanted.jpg"
-import CopExplain from "../assets/cop-explain.png"
-import CopIdle from "../assets/cop-idle.png"
-import CopLetgo from "../assets/cop-letgo.png"
-import CopTicket from "../assets/cop-ticket.png"
-import CopWave from "../assets/cop-wave.png"
-import CopWonder from "../assets/cop-wonder.png"
+import { Page, PageContext, PlayerDataContext } from "../App"
 import DudeHappy from "../assets/dude-happy.png"
 import DudeScared from "../assets/dude-scared.png"
 import DudeTalking from "../assets/dude-talking.png"
-import BgCityDay from "../assets/city-day.jpg"
 import GavelBlock from "../assets/gavel-block.png"
 import Gavel from "../assets/gavel.png"
-import Heart from "../assets/heart.png"
+import Health from "../assets/heart.png"
+import Coin from "../assets/coin.png"
+import HealthEmpty from "../assets/heart-empty.png"
+import CopLetgoWanted from "../assets/wanted.jpg"
 import { AnimatedDiv } from "../components/animated-div"
 import { Character, GameChar } from "../components/game-char"
+import { GameAssets, GameItems } from "../items/game-items"
 import { Choice, getQuestions } from "../items/questions"
 import { delay } from "../utils/delay"
-import { Page, PageContext } from "../App"
+
+function gacha(odds: number, onSuccess : ()=>void){
+    if(odds == 0) return;
+    const random = Math.random();
+    if(random < odds) {
+        onSuccess();
+    }
+}
 
 export const Classic = () => {
     const [leftChar, _setLeftChar] = createSignal<Character>({});
@@ -49,6 +51,9 @@ export const Classic = () => {
         await textAnim.promise;
     }
 
+    const [player, setPlayer] = useContext(PlayerDataContext)!;
+    const avatar = createMemo(() => player.equipped.avatar);
+
     let gavelAnim = Promise.withResolvers<void>();
     const [currentChoices, setCurrentChoices] = createSignal<Choice[]>([])
     const [choiceId, setChoiceId] = createSignal<number | null>(null);
@@ -56,13 +61,26 @@ export const Classic = () => {
     const [showTicket, setShowTicket] = createSignal<boolean>(false);
     const [ticket, setTicket] = createSignal<boolean>(false);
     const [letgoStatus, setLetgoStatus] = createSignal<boolean>(false);
+    const [isRegen, setIsRegen] = createSignal<boolean>(false);
     const [showLetgoStatus, setShowLetgoStatus] = createSignal<boolean>(false);
-    const [health, setHealth] = createSignal<number>(3);
+    const [health, setHealth] = createSignal<number>(player.maxHealth);
     const [score, setScore] = createSignal<number>(0);
     const [totalQuestion, setTotalQuestion] = createSignal<number>(0);
     const [gameOver, setGameOver] = createSignal(false);
     const questions = getQuestions(10);
     let questionIdx = -1;
+
+    const doRegen = ()=>{
+        setIsRegen(false);
+        if(health() < player.maxHealth){
+            gacha(player.healthRegen/GameItems.healthRegenDivisor, ()=>{
+                batch(()=>{
+                    setIsRegen(true)
+                    setHealth(p=>p+1);
+                })
+            });
+        }
+    }
 
     onMount(async () => {
         setTotalQuestion(questions.length);
@@ -80,12 +98,13 @@ export const Classic = () => {
             _setText(null);
         })
         if (questionIdx === questions.length - 1 || health() === 0) {
+            setPlayer("coin", p=>p+score());
             setGameOver(true);
             return;
         }
 
         await setRightChar({
-            src: CopIdle,
+            src: GameAssets.Avatar[avatar()][GameItems.AvatarState.Idle],
             enterClass: "fade-in-right"
         })
         await delay(100);
@@ -98,7 +117,7 @@ export const Classic = () => {
         setCurrentChoices(questions[questionIdx].choices);
         await delay(100);
         await setRightChar({
-            src: CopWonder,
+            src: GameAssets.Avatar[avatar()][GameItems.AvatarState.Wonder],
         })
         setShowTicket(true);
     }
@@ -106,7 +125,7 @@ export const Classic = () => {
     const onTicket = async () => {
         setTicket(true);
         setRightChar({
-            src: CopTicket
+            src: GameAssets.Avatar[avatar()][GameItems.AvatarState.Ticket],
         })
         await setLeftChar({
             enterClass: "shake",
@@ -120,7 +139,7 @@ export const Classic = () => {
             _setText(null);
         })
         setRightChar({
-            src: CopLetgo,
+            src: GameAssets.Avatar[avatar()][GameItems.AvatarState.Letgo],
         })
         await delay(300);
         await setLeftChar({
@@ -131,12 +150,13 @@ export const Classic = () => {
         await delay(200);
         await setRightChar({ overridePrevExitClass: "fade-out-right" })
         await delay(700);
-        if(questions[questionIdx].noRightChoice) {
-            setScore(p=>p+1);
+        if (questions[questionIdx].noRightChoice) {
+            setScore(p => p + 1);
+            doRegen();
             setLetgoStatus(true);
-        }else {
+        } else {
             setLetgoStatus(false);
-            setHealth(p=>p-1);
+            setHealth(p => p - 1);
         }
         setShowLetgoStatus(true);
         await delay(1500);
@@ -148,7 +168,7 @@ export const Classic = () => {
             src: DudeHappy,
         })
         setRightChar({
-            src: CopWonder
+            src: GameAssets.Avatar[avatar()][GameItems.AvatarState.Wonder],
         });
         setTicket(false);
     }
@@ -158,7 +178,11 @@ export const Classic = () => {
         setChoiceId(idx);
         await setRightChar({ overridePrevExitClass: "fade-out-left" });
         await delay(100);
-        await setLeftChar({ enterClass: "fade-in-right", src: CopArrest, exitClass: "fade-out-left" });
+        await setLeftChar({
+            enterClass: "fade-in-right",
+            src: GameAssets.Avatar[avatar()][GameItems.AvatarState.Arrest],
+            exitClass: "fade-out-left"
+        });
         await delay(300);
         await setLeftChar({});
         await delay(300);
@@ -172,6 +196,7 @@ export const Classic = () => {
                 setHealth(p => p - 1);
             })
         } else if (questions[questionIdx].choices[choiceId()!].correct) {
+            doRegen();
             batch(() => {
                 setStatus("guilty");
                 setScore(p => p + 1);
@@ -186,7 +211,7 @@ export const Classic = () => {
     const statusExist = createMemo(() => !!status());
 
     const pageContext = useContext(PageContext)!;
-    function backToMenu(){
+    function backToMenu() {
         pageContext.set(Page.main);
     }
 
@@ -195,19 +220,19 @@ export const Classic = () => {
             <GameOver score={score} onMenuClick={backToMenu} totalQuestion={totalQuestion} />
         </Show>
 
-        <LetgoResult letgoStatus={letgoStatus} showLetgoStatus={showLetgoStatus}/>
+        <LetgoResult avatar={avatar} letgoStatus={letgoStatus} showLetgoStatus={showLetgoStatus} isRegen={isRegen}/>
 
-        <ArrestResult onGavelAnimDone={()=>gavelAnim.resolve()} status={status} statusExist={statusExist}/>
+        <ArrestResult isRegen={isRegen} onGavelAnimDone={() => gavelAnim.resolve()} status={status} statusExist={statusExist} />
 
         <div class="absolute w-full h-full z-1 overflow-hidden bg-black opacity-30" />
         <div class="absolute w-full h-full z-0 overflow-hidden">
-            <img src={BgCityDay} class="w-full h-full object-cover" alt="" />
+            <img src={GameAssets.background[player.equipped.background]} class="w-full h-full object-cover" alt="" />
         </div>
         <div class="flex flex-col p-3 relative z-2 h-full">
             <div class="flex justify-between">
                 <div class="flex gap-2">
-                    <For each={Array.from({ length: health() })}>
-                        {() => <img src={Heart} class="w-12" alt="" />}
+                    <For each={Array.from({ length: player.maxHealth })}>
+                        {(_, i) => <img src={i() < health() ? Health : HealthEmpty} class="w-10" alt="" />}
                     </For>
                 </div>
                 <div class="text-2xl flex items-center bg-blue-500/80 border px-2 border-yellow-300 rounded-lg">
@@ -254,7 +279,7 @@ export const Classic = () => {
                         <Show when={ticket()}>
                             <div class={"flex flex-col gap-2 transition-opacity duration-300 " + (showTicket() ? "opacity-100" : "opacity-0 pointer-events-none")}>
                                 <hr class="text-yellow-300" />
-                                <div class="text-yellow-300">Pilih teks dibawah ini yang sesuai dengan EYD</div>
+                                <div class="text-yellow-300">Pilih teks dibawah ini yang menurut anda benar</div>
                                 <For each={currentChoices()}>
                                     {(choice, idx) =>
                                         <button
@@ -282,11 +307,12 @@ export const Classic = () => {
 }
 
 interface ArrestResultProps {
-    status : Accessor<"not-guilty" | "wrong-charge" | "guilty" | "pending" | null>,
-    statusExist : Accessor<boolean>,
-    onGavelAnimDone : ()=>void
+    status: Accessor<"not-guilty" | "wrong-charge" | "guilty" | "pending" | null>,
+    statusExist: Accessor<boolean>,
+    onGavelAnimDone: () => void,
+    isRegen : Accessor<boolean>
 }
-const ArrestResult = (props : ArrestResultProps)=>{
+const ArrestResult = (props: ArrestResultProps) => {
     return <>
         <div class={"transform -translate-y-1/2 -translate-x-1/2 absolute top-1/2 left-1/2 w-82 h-82 lg:w-96 lg:h-96 rounded-full z-4 transition-all duration-200 pointer-events-none "
             + (props.status() === 'not-guilty' ? "bg-red-500" : props.status() === "guilty" ? "bg-green-500" : props.status() === "wrong-charge" ? "bg-orange-400" : "scale-0 opacity-0")}></div>
@@ -300,13 +326,18 @@ const ArrestResult = (props : ArrestResultProps)=>{
                     <div class={"text-2xl font-bold text-white mt-2 transform transition-all duration-200 delay-200 " + (props.status() !== "pending" ? "opacity-100" : "opacity-0 translate-y-10")}>
                         {props.status() === "guilty" ? "Tuduhan benar" : props.status() === "not-guilty" ? "Salah tangkap" : props.status() === "wrong-charge" ? "Tuduhan salah" : ""}
                     </div>
-                    <div class={"transform transition-all p-2 mt-10 border-2 text-white text-xl flex gap-2 items-center justify-center rounded-lg "
-                        + (props.status() === 'not-guilty' ? "bg-red-500 border-red-800" : props.status() === "guilty" ? "bg-green-500 border-green-800" : "translate-Y-10 opacity-0")}>
-                        {props.status() === "guilty"
-                            ? <div>Skor +1</ div>
-                            : props.status() === "not-guilty"
-                                ? <><img src={Heart} class="w-6"/><div>-1</div></>
-                                : ""}
+                    <div class={`transform transition-all flex flex-col gap-2 ${(props.status() === "pending" || props.status() === "wrong-charge" || props.status() === null) ? "translate-Y-10 opacity-0" : ""}`}>
+                        <div class={"p-2 mt-10 border-2 text-white text-xl flex gap-2 items-center justify-center rounded-lg "
+                        + (props.status() === 'not-guilty' ? "bg-red-500 border-red-800" : "bg-green-500 border-green-800")}>
+                            {props.status() === "guilty"
+                                ? <div>Skor +1</ div>
+                                : props.status() === "not-guilty"
+                                    ? <><img src={Health} class="w-6" /><div>-1</div></>
+                                    : ""}
+                        </div>
+                        {props.isRegen() && <div class="p-2 border-2 text-white text-xl flex gap-2 items-center justify-center rounded-lg bg-green-500 border-green-800">
+                            <img src={Health} class="w-6" /><div>+1</div>
+                        </div>}
                     </div>
                 </div>
             </div>
@@ -316,32 +347,38 @@ const ArrestResult = (props : ArrestResultProps)=>{
 }
 
 interface LetgoResultProps {
-    showLetgoStatus : Accessor<boolean>,
-    letgoStatus : Accessor<boolean | null>,
+    showLetgoStatus: Accessor<boolean>,
+    letgoStatus: Accessor<boolean | null>,
+    avatar : Accessor<GameItems.Avatar>,
+    isRegen : Accessor<boolean>
 }
 
-const LetgoResult =  (props : LetgoResultProps) => {
+const LetgoResult = (props: LetgoResultProps) => {
     return <>
-        <div class={"absolute left-0 top-0 w-full h-full transition-opacity duration-300 z-3 bg-black " + (props.showLetgoStatus()? "opacity-50" : "opacity-0 pointer-events-none")}></div>
-        <div class={"absolute flex flex-col justify-center left-0 top-0 w-full gap-5 h-full transition-opacity duration-300 px-3 z-4 " + (props.showLetgoStatus()? "opacity-100" : "opacity-0 pointer-events-none")}>
+        <div class={"absolute left-0 top-0 w-full h-full transition-opacity duration-300 z-3 bg-black " + (props.showLetgoStatus() ? "opacity-50" : "opacity-0 pointer-events-none")}></div>
+        <div class={"absolute flex flex-col justify-center left-0 top-0 w-full gap-5 h-full transition-opacity duration-300 px-3 z-4 " + (props.showLetgoStatus() ? "opacity-100" : "opacity-0 pointer-events-none")}>
             <div class={"px-2 py-5 text-2xl font-medium flex flex-col gap-4 items-center border-2 rounded-lg text-white " + (props.letgoStatus() ? "bg-green-500 border-green-800" : "bg-red-500 border-red-800")}>
                 {props.letgoStatus() ?
                     <>
-                        <img src={CopLetgoGift} class="h-80 rounded-md"/>
+                        <img src={GameAssets.Avatar[props.avatar()][GameItems.AvatarState.Gift]} class="h-80 rounded-md" />
                         <div class="text-center">Keputusan anda benar</div>
                     </> :
                     <>
-                        <img src={CopLetgoWanted} class="transform rotate-6 h-80 rounded-sm"/>
+                        <img src={CopLetgoWanted} class="transform rotate-6 h-80 rounded-sm" />
                         <div class="text-center">Anda membiarkan buronan lolos</div>
-                    </> }
+                    </>}
             </div>
-            <div class={"transform transition-all p-2 border-2 text-white text-xl flex gap-2 items-center justify-center rounded-lg "
-                + (props.letgoStatus() === false ? "bg-red-500 border-red-800" : props.letgoStatus() === true ? "bg-green-500 border-green-800" : "translate-Y-10 opacity-0")}>
-                {props.letgoStatus() === true
-                    ? <div>Skor +1</ div>
-                    : props.letgoStatus() === false
-                        ? <><img src={Heart} class="w-6"/><div>-1</div></>
-                        : ""}
+            <div class={`transform transition-all flex flex-col gap-2 ${props.letgoStatus !== undefined ? "" : "translate-Y-10 opacity-0"} `}>
+                <div class={"p-2 border-2 text-white text-xl flex gap-2 items-center justify-center rounded-lg " + (props.letgoStatus() === false ? "bg-red-500 border-red-800" : "bg-green-500 border-green-800")}>
+                    {props.letgoStatus() === true
+                        ? <div>Skor +1</ div>
+                        : props.letgoStatus() === false
+                            ? <><img src={Health} class="w-6" /><div>-1</div></>
+                            : ""}
+                </div>
+                {props.isRegen() && <div class="p-2 border-2 text-white text-xl flex gap-2 items-center justify-center rounded-lg bg-green-500 border-green-800">
+                    <img src={Health} class="w-6" /><div>+1</div>
+                </div>}
             </div>
         </div>
     </>
@@ -350,7 +387,7 @@ const LetgoResult =  (props : LetgoResultProps) => {
 interface GameOverProps {
     score: Accessor<number>,
     totalQuestion: Accessor<number>,
-    onMenuClick : ()=>void,
+    onMenuClick: () => void,
 }
 const GameOver = (props: GameOverProps) => {
     return <>
@@ -366,10 +403,14 @@ const GameOver = (props: GameOverProps) => {
                         /{props.totalQuestion()}
                     </span>
                 </div>
+                <div class="flex gap-1 text-white">
+                    <img src={Coin} alt="" class="w-7" />
+                    <div>+ {props.score()}</div>
+                </div>
                 <button
                     onclick={() => props.onMenuClick()}
                     class={
-                        " border-2 p-2 rounded-lg transform hover:scale-102 cursor-pointer transition-all bg-blue-600 text-yellow-300 border-yellow-300" 
+                        " border-2 p-2 rounded-lg transform hover:scale-102 cursor-pointer transition-all bg-blue-600 text-yellow-300 border-yellow-300"
                     }>
                     Kembali ke menu
                 </button>

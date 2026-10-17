@@ -4,6 +4,11 @@
     @apply transform hover:scale-110 cursor-pointer transition-all;
 }
 
+
+.hover-scale-sm {
+    @apply transform hover:scale-105 cursor-pointer transition-all;
+}
+
 @keyframes fade-in-left-k {
     0% {
         transform : translate(-20px, 0);
